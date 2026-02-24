@@ -19,7 +19,7 @@ Designed with a modern, glassmorphic UI and built for speed.
 - **Build Tool**: Vite
 - **Styling**: Vanilla CSS (Variables + Flexbox/Grid)
 - **Icons**: Lucide React
-- **Export Libraries**: `xlsx`, `jspdf`, `jszip`
+- **Export Libraries**: `xlsx`, `pdf-lib`, `jszip`
 
 ## 🚀 Getting Started
 

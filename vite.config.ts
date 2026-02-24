@@ -17,7 +17,7 @@ export default defineConfig({
         manualChunks: {
           react: ["react", "react-dom"],
           lucide: ["lucide-react"],
-          pdf: ["jspdf"],
+          pdf: ["pdf-lib"],
           excel: ["xlsx"],
           zip: ["jszip"],
         },

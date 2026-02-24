@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import * as xlsx from "xlsx";
-import jsPDF from "jspdf";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import type { TabInfo, WindowGroup } from "../types/tab";
 
 const getDisplayDateTime = () => {
@@ -50,6 +50,42 @@ export const copyAllUrls = async (
   }
 };
 
+const wrapText = (text: string, maxWidth: number, fontSize: number): string[] => {
+  const avgCharWidth = fontSize * 0.5; // Approximate character width
+  const maxChars = Math.floor(maxWidth / avgCharWidth);
+  const lines: string[] = [];
+
+  const words = text.split(" ");
+  let currentLine = "";
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (testLine.length <= maxChars) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+      // Handle long words that exceed max width
+      if (word.length > maxChars) {
+        let remaining = word;
+        while (remaining.length > maxChars) {
+          lines.push(remaining.slice(0, maxChars));
+          remaining = remaining.slice(maxChars);
+        }
+        currentLine = remaining;
+      } else {
+        currentLine = word;
+      }
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+};
+
 export const downloadAllTabs = async (windowGroups: WindowGroup[]) => {
   const tabs = flattenTabs(windowGroups);
   const zip = new JSZip();
@@ -80,35 +116,84 @@ export const downloadAllTabs = async (windowGroups: WindowGroup[]) => {
   const excelBuffer = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
   zip.file(`${baseFileName}.xlsx`, excelBuffer);
 
-  // PDF Data
-  const doc = new jsPDF();
-  let y = 10;
-  doc.setFontSize(16);
-  doc.text("OneHandle - Saved Tabs", 10, y);
-  y += 10;
-  doc.setFontSize(10);
-  doc.text(`Generated: ${displayDateTime}`, 10, y);
-  y += 10;
+  // PDF Data using pdf-lib
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontSize = 10;
+  const fontSizeTitle = 12;
+  const fontSizeHeader = 16;
+  const lineHeight = fontSize * 1.5;
+  const margin = 50;
+  const pageWidth = 595.28; // A4 width in points
+  const pageHeight = 841.89; // A4 height in points
+  const maxWidth = pageWidth - 2 * margin;
 
-  tabs.forEach((tab, index) => {
-    if (y > 280) {
-      doc.addPage();
-      y = 10;
-    }
-    doc.setFont("helvetica", "bold");
-    const title = doc.splitTextToSize(`${index + 1}. ${tab.title}`, 190);
-    doc.text(title, 10, y);
-    y += title.length * 4; // concise line height
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let yPosition = pageHeight - margin;
 
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100);
-    const url = doc.splitTextToSize(tab.url, 180);
-    doc.text(url, 15, y);
-    doc.setTextColor(0);
-    y += url.length * 4 + 4; // spacing between items
+  // Header
+  page.drawText("OneHandle - Saved Tabs", {
+    x: margin,
+    y: yPosition,
+    size: fontSizeHeader,
+    font: fontBold,
+    color: rgb(0, 0, 0),
   });
+  yPosition -= lineHeight * 1.5;
 
-  const pdfBlob = doc.output("blob");
+  page.drawText(`Generated: ${displayDateTime}`, {
+    x: margin,
+    y: yPosition,
+    size: fontSize,
+    font,
+    color: rgb(0.5, 0.5, 0.5),
+  });
+  yPosition -= lineHeight * 2;
+
+  // Tabs
+  for (let i = 0; i < tabs.length; i++) {
+    const tab = tabs[i];
+
+    // Title
+    const titleLines = wrapText(`${i + 1}. ${tab.title}`, maxWidth, fontSizeTitle);
+    for (const line of titleLines) {
+      if (yPosition < margin + lineHeight) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        yPosition = pageHeight - margin;
+      }
+      page.drawText(line, {
+        x: margin,
+        y: yPosition,
+        size: fontSizeTitle,
+        font: fontBold,
+        color: rgb(0, 0, 0),
+      });
+      yPosition -= lineHeight;
+    }
+
+    // URL
+    const urlLines = wrapText(tab.url, maxWidth - 20, fontSize);
+    for (const line of urlLines) {
+      if (yPosition < margin + lineHeight) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        yPosition = pageHeight - margin;
+      }
+      page.drawText(line, {
+        x: margin + 20,
+        y: yPosition,
+        size: fontSize,
+        font,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+      yPosition -= lineHeight;
+    }
+
+    yPosition -= lineHeight * 0.5; // Extra spacing between items
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  const pdfBlob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
   zip.file(`${baseFileName}.pdf`, pdfBlob);
 
   // Generate ZIP
