@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "onehandle",
   "version": "1.0.0",
-  "description": "Privacy-first tab manager. View, search, copy, and favorite your open tabs. All data stays local — no tracking, no cloud, no servers.",
+  "description": "Privacy-first tab manager. View, search, copy, and favorite your open tabs. All data stays local, no cloud, no servers.",
   "permissions": ["tabs", "storage"],
   "action": {
     "default_popup": "index.html",
